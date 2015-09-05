@@ -11,6 +11,7 @@ our @EXPORT_OK = qw( choose );
 use Carp qw( croak carp );
 use Text::LineFold;
 use Unicode::GCString;
+use Text::ANSI::WideUtil qw(ta_mbtrunc);
 
 use Term::Choose::Constants qw( :choose );
 
@@ -648,7 +649,7 @@ sub __copy_orig_list {
                 $copy = sprintf "%s(0x%x)", ref $copy, $copy;
             }
             $copy =~ s/\p{Space}/ /g;  # replace, but don't squash sequences of spaces
-            $copy =~ s/\p{C}//g;
+            $copy =~ s/\p{C}/$&=~m|\e| && $&/eg;  # remove \p{C} but keep \e
             $copy;
         } @{$self->{orig_list}} ];
     }
@@ -862,27 +863,15 @@ sub __size_and_layout {
 
 sub __print_columns {
     #my $self = $_[0];
-    Unicode::GCString->new( $_[1] )->columns();
+    Unicode::GCString->new($_[1] =~ s{ \e\[ [\d;]* m }{}xmsgr)->columns();
 }
 
 
 sub __unicode_trim {
     my ( $self, $str, $len ) = @_;
     return '' if $len <= 0; #
-    my $gcs = Unicode::GCString->new( $str );
-    my $pos = $gcs->pos;
-    $gcs->pos( 0 );
-    my $cols = 0;
-    my $gc;
-    while ( defined( $gc = $gcs->next ) ) {
-        if ( $len < ( $cols += $gc->columns ) ) {
-            my $ret = $gcs->substr( 0, $gcs->pos - 1 );
-            $gcs->pos( $pos );
-            return $ret->as_string;
-        }
-    }
-    $gcs->pos( $pos );
-    return $gcs->as_string;
+
+    return ta_mbtrunc($str, $len - 1);
 }
 
 
